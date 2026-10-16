@@ -1,0 +1,65 @@
+{% extends "layout.html" %}
+{% block title %}Upload · Explainable Deepfake Detection{% endblock %}
+{% block content %}
+<section class="hero">
+  <p class="eyebrow">Image &amp; video forensics</p>
+  <h1>Is this face real?<br><span class="accent">And why does the model think so?</span></h1>
+  <p class="lede">
+    Upload a clip or a photo. The system samples frames, isolates the face, scores it with a
+    convolutional network, then uses Grad-CAM to show <em>where</em> it looked and maps that
+    attention onto facial regions to explain <em>what</em> it found suspicious.
+  </p>
+</section>
+
+{% if error %}
+<div class="alert alert-error" role="alert">{{ error }}</div>
+{% endif %}
+
+{% if not model_ready %}
+<div class="alert alert-warn" role="status">
+  No trained model found (<code>model/{{ model_path }}</code>). Prepare a dataset and run
+  <code>python train.py</code>, then reload this page.
+</div>
+{% endif %}
+
+<form class="upload-card" id="upload-form" action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data">
+  <label class="dropzone" id="dropzone" for="media-input">
+    <input type="file" id="media-input" name="media" accept="video/*,image/*" required>
+    <div class="dz-inner">
+      <div class="dz-icon" aria-hidden="true">
+        <svg viewBox="0 0 48 48" width="44" height="44" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="6" y="10" width="36" height="28" rx="5"/>
+          <path d="M18 38l6-8 6 8M24 30V18"/>
+          <circle cx="15" cy="19" r="2.5"/>
+        </svg>
+      </div>
+      <p class="dz-title">Drop a video or image here</p>
+      <p class="dz-sub">or <span class="link">browse your files</span> &middot; up to {{ max_mb }} MB</p>
+      <p class="dz-file" id="dz-file" hidden></p>
+    </div>
+  </label>
+
+  <div class="controls">
+    <label class="control">
+      <span>Frames to sample</span>
+      <input type="number" name="frames" min="1" max="64" value="{{ default_frames }}">
+      <small>More frames = steadier verdict, slower analysis</small>
+    </label>
+    <button class="btn-primary" type="submit" id="submit-btn" {% if not model_ready %}disabled{% endif %}>
+      <span class="btn-label">Analyze</span>
+      <span class="btn-spinner" aria-hidden="true"></span>
+    </button>
+  </div>
+  <p class="formats muted">Accepted: {{ exts|join(', ') }}</p>
+</form>
+
+<section class="how">
+  <h2>How a verdict is produced</h2>
+  <ol class="steps">
+    <li><b>Sample</b><span>Up to N frames are taken evenly across the clip - neighbouring frames are near-duplicates, so more adds little.</span></li>
+    <li><b>Detect</b><span>YuNet finds the largest face and five landmarks. The crop keeps a 30% margin, because face-swap seams live at the edge of the face.</span></li>
+    <li><b>Classify</b><span>Every crop goes through an EfficientNet trained on real/fake faces. The video verdict is the mean P(fake) across frames.</span></li>
+    <li><b>Explain</b><span>Grad-CAM highlights the pixels that drove the decision; the heatmap mass is attributed to eyes, mouth, nose, hairline, skin and the face boundary.</span></li>
+  </ol>
+</section>
+{% endblock %}

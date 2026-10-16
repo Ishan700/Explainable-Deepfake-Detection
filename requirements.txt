@@ -1,0 +1,19 @@
+# Core
+tensorflow>=2.16,<2.22      # Keras 3 backend (use tensorflow-cpu if you have no GPU)
+keras>=3.3
+numpy>=1.26
+opencv-python>=4.8,<6        # video decoding + YuNet face detector (cv2.FaceDetectorYN)
+pillow>=10.0
+
+# Training / evaluation
+scikit-learn>=1.4
+pandas>=2.1
+matplotlib>=3.8
+tqdm>=4.66
+
+# Web demo
+flask>=3.0
+werkzeug>=3.0
+
+# Notebook (optional)
+jupyter>=1.0

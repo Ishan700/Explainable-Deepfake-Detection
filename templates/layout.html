@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Explainable Deepfake Detection{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('index') }}">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-text">Explainable<b>Deepfake</b>Detection</span>
+    </a>
+    <nav class="topnav">
+      <span class="pipeline">
+        <span>frames</span><i>&rsaquo;</i><span>face</span><i>&rsaquo;</i><span>CNN</span><i>&rsaquo;</i><span>Grad-CAM</span><i>&rsaquo;</i><span>why</span>
+      </span>
+    </nav>
+  </header>
+
+  <main class="page">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <span>Minor project &middot; CNN classifier + Grad-CAM attribution &middot; runs fully offline</span>
+    <span class="muted">Verdicts are probabilistic. Treat them as evidence, not proof.</span>
+  </footer>
+  <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>

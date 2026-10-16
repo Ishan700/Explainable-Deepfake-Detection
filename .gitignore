@@ -1,0 +1,31 @@
+# Data and trained weights are never committed
+dataset/*
+!dataset/.gitkeep
+data_raw/*
+!data_raw/README.md
+model/*.keras
+model/*.h5
+model/training_log.csv
+results/*
+!results/.gitkeep
+
+# Web demo scratch space
+static/uploads/*
+!static/uploads/.gitkeep
+static/results/*
+!static/results/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
