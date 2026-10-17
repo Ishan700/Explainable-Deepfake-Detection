@@ -8,7 +8,9 @@ Most deepfake detectors stop at a probability. This project adds the explanation
 
 ![Upload page](docs/screenshots/upload_page.png)
 
-![Verdict and reliability cards](docs/screenshots/verdict_cards.png)
+![Examination sheet header with the verdict stamp](docs/screenshots/verdict_cards.png)
+
+![Per-frame scores on the film strip](docs/screenshots/film_strip.png)
 
 ---
 
@@ -185,7 +187,26 @@ These hints describe what attention on a region *usually* corresponds to; they a
 ## Results
 
 <!-- RESULTS:START -->
-No results yet — after `python evaluate.py`, run `python scripts/report_results.py` to fill this section.
+Trained on **Celeb-DF v2, 300 videos per class** with `efficientnetb0` (ImageNet init), split by video, evaluated on the held-out `test` split. Frames per video: 16. Threshold 0.5. Updated 2026-10-17.
+
+| Level | n | Accuracy | AUC | Precision (fake) | Recall (fake) | F1 (fake) |
+|---|---|---|---|---|---|---|
+| Frame | 1440 | 0.652 | 0.734 | 0.615 | 0.815 | 0.701 |
+| Video | 90 | 0.667 | 0.739 | 0.627 | 0.822 | 0.712 |
+
+Video-level confusion: real→real 23, real→fake 22, fake→real 8, fake→fake 37.
+
+AUC is the headline number: it does not depend on the 0.5 threshold, and the classes are not always balanced. The in-dataset score above is optimistic by construction; the honest check is a **cross-dataset** run (`python evaluate.py --dataset <other>`), which is usually 10–30 points lower.
+
+**Training curves (loss / accuracy / AUC per epoch)**  
+![Training curves (loss / accuracy / AUC per epoch)](docs/results/training_curves.png)
+
+**ROC curve, frame level**  
+![ROC curve, frame level](docs/results/roc_test.png)
+
+**Confusion matrix, video level**  
+![Confusion matrix, video level](docs/results/confusion_test_videos.png)
+
 <!-- RESULTS:END -->
 
 In-dataset numbers above 0.9 AUC are routine in the literature; generalising to a different generator or compression level is the actual research problem, and reporting the drop is more valuable than hiding it.

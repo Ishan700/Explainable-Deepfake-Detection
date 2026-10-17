@@ -1,65 +1,133 @@
 {% extends "layout.html" %}
 {% block title %}Upload · Explainable Deepfake Detection{% endblock %}
 {% block content %}
-<section class="hero">
-  <p class="eyebrow">Image &amp; video forensics</p>
-  <h1>Is this face real?<br><span class="accent">And why does the model think so?</span></h1>
-  <p class="lede">
-    Upload a clip or a photo. The system samples frames, isolates the face, scores it with a
-    convolutional network, then uses Grad-CAM to show <em>where</em> it looked and maps that
-    attention onto facial regions to explain <em>what</em> it found suspicious.
-  </p>
-</section>
 
 {% if error %}
-<div class="alert alert-error" role="alert">{{ error }}</div>
+<div class="notice notice-error" role="alert">{{ error }}</div>
 {% endif %}
 
-{% if not model_ready %}
-<div class="alert alert-warn" role="status">
-  No trained model found (<code>model/{{ model_path }}</code>). Prepare a dataset and run
-  <code>python train.py</code>, then reload this page.
-</div>
-{% endif %}
+<section class="intro">
+  <div class="intro-text">
+    <h1>Is this face real?</h1>
+    <p class="lede">
+      Hand over a clip or a photo. You get a verdict, the heatmap the network used
+      to reach it, and a plain-English reason tied to the parts of the face it found
+      suspicious.
+    </p>
 
-<form class="upload-card" id="upload-form" action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data">
-  <label class="dropzone" id="dropzone" for="media-input">
-    <input type="file" id="media-input" name="media" accept="video/*,image/*" required>
-    <div class="dz-inner">
-      <div class="dz-icon" aria-hidden="true">
-        <svg viewBox="0 0 48 48" width="44" height="44" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="6" y="10" width="36" height="28" rx="5"/>
-          <path d="M18 38l6-8 6 8M24 30V18"/>
-          <circle cx="15" cy="19" r="2.5"/>
-        </svg>
+    <form class="sheet upload-sheet" id="upload-form" action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data">
+      <div class="sheet-rule">
+        <span>Submit evidence</span>
+        <span class="model-status {{ 'ok' if model_ready else 'missing' }}">
+          <i class="dot" aria-hidden="true"></i>
+          {% if model_ready %}Model loaded{% else %}No trained model yet{% endif %}
+        </span>
       </div>
-      <p class="dz-title">Drop a video or image here</p>
-      <p class="dz-sub">or <span class="link">browse your files</span> &middot; up to {{ max_mb }} MB</p>
-      <p class="dz-file" id="dz-file" hidden></p>
-    </div>
-  </label>
 
-  <div class="controls">
-    <label class="control">
-      <span>Frames to sample</span>
-      <input type="number" name="frames" min="1" max="64" value="{{ default_frames }}">
-      <small>More frames = steadier verdict, slower analysis</small>
-    </label>
-    <button class="btn-primary" type="submit" id="submit-btn" {% if not model_ready %}disabled{% endif %}>
-      <span class="btn-label">Analyze</span>
-      <span class="btn-spinner" aria-hidden="true"></span>
-    </button>
+      <label class="dropzone" id="dropzone" for="media-input">
+        <input type="file" id="media-input" name="media" accept="video/*,image/*" required>
+        <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+        <div class="dz-inner">
+          <p class="dz-title">Drop a video or photo here</p>
+          <p class="dz-sub">or <span class="link">choose a file</span>, up to {{ max_mb }} MB</p>
+          <p class="dz-file" id="dz-file" hidden></p>
+        </div>
+      </label>
+
+      <div class="controls">
+        <label class="control">
+          <span>Frames to sample</span>
+          <input type="number" name="frames" min="1" max="64" value="{{ default_frames }}">
+        </label>
+        <button class="btn-primary" type="submit" id="submit-btn" {% if not model_ready %}disabled{% endif %}>
+          <span class="btn-label">Analyze</span>
+          <span class="btn-spinner" aria-hidden="true"></span>
+        </button>
+      </div>
+      <p class="formats">
+        {% if not model_ready %}Run <code>python train.py</code> first, then reload this page. {% endif %}
+        Accepts {{ exts|join(', ') }}. Uploads are deleted after 30 minutes.
+      </p>
+    </form>
   </div>
-  <p class="formats muted">Accepted: {{ exts|join(', ') }}</p>
-</form>
 
-<section class="how">
-  <h2>How a verdict is produced</h2>
+  <figure class="scanner" aria-hidden="true">
+    <svg viewBox="0 0 320 400" width="100%" height="100%">
+      <defs>
+        <radialGradient id="heat" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#ff5a3c" stop-opacity=".75"/>
+          <stop offset="60%" stop-color="#ffb13c" stop-opacity=".35"/>
+          <stop offset="100%" stop-color="#ffb13c" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="beam" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="var(--accent)" stop-opacity="0"/>
+          <stop offset=".5" stop-color="var(--accent)" stop-opacity=".35"/>
+          <stop offset="1" stop-color="var(--accent)" stop-opacity="0"/>
+        </linearGradient>
+        <clipPath id="boxclip"><rect x="62" y="48" width="196" height="246"/></clipPath>
+      </defs>
+
+      <!-- figure: a line drawing, not a photo -->
+      <g class="figure" fill="none" stroke="var(--ink)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M70 400c6-62 36-96 90-104 54 8 84 42 90 104"/>
+        <path d="M140 292c2 14 4 22 4 30M180 292c-2 14-4 22-4 30"/>
+        <path d="M160 72c-46 0-70 36-70 86 0 60 32 112 70 112s70-52 70-112c0-50-24-86-70-86z"/>
+        <path d="M92 160c-10-2-16 6-14 16 2 12 10 18 18 16M228 160c10-2 16 6 14 16-2 12-10 18-18 16"/>
+        <path d="M122 172c10-8 24-8 34 0M164 172c10-8 24-8 34 0"/>
+        <path d="M160 176v34l-10 8" />
+        <path d="M134 236c16 10 36 10 52 0"/>
+        <path d="M94 110c18-24 40-34 66-34 26 0 48 10 66 34"/>
+      </g>
+
+      <!-- heat on the cheek, pulsing -->
+      <circle class="heat" cx="208" cy="214" r="46" fill="url(#heat)"/>
+
+      <!-- detector box that draws itself -->
+      <rect class="box" x="62" y="48" width="196" height="246" fill="none" stroke="var(--accent)" stroke-width="2" stroke-dasharray="884" stroke-dashoffset="884"/>
+      <g class="brackets" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round">
+        <path d="M62 68V48h20M238 48h20v20M62 274v20h20M238 294h20v-20"/>
+      </g>
+      <text class="tag" x="62" y="40" font-size="12" fill="var(--accent)">face 0.97</text>
+
+      <!-- five landmarks, popping in sequence -->
+      <g class="landmarks" fill="var(--accent)">
+        <circle class="lm" style="--i:0" cx="128" cy="172" r="4"/>
+        <circle class="lm" style="--i:1" cx="192" cy="172" r="4"/>
+        <circle class="lm" style="--i:2" cx="160" cy="212" r="4"/>
+        <circle class="lm" style="--i:3" cx="138" cy="240" r="4"/>
+        <circle class="lm" style="--i:4" cx="182" cy="240" r="4"/>
+      </g>
+
+      <!-- scan beam, looping inside the box -->
+      <g clip-path="url(#boxclip)">
+        <rect class="beam" x="62" y="0" width="196" height="40" fill="url(#beam)"/>
+        <line class="beamline" x1="62" x2="258" y1="20" y2="20" stroke="var(--accent)" stroke-width="1.5" stroke-opacity=".8"/>
+      </g>
+    </svg>
+    <figcaption>Sample frames, find the face, score it, explain the score.</figcaption>
+  </figure>
+</section>
+
+<section class="method">
+  <h2>How a verdict is reached</h2>
   <ol class="steps">
-    <li><b>Sample</b><span>Up to N frames are taken evenly across the clip - neighbouring frames are near-duplicates, so more adds little.</span></li>
-    <li><b>Detect</b><span>YuNet finds the largest face and five landmarks. The crop keeps a 30% margin, because face-swap seams live at the edge of the face.</span></li>
-    <li><b>Classify</b><span>Every crop goes through an EfficientNet trained on real/fake faces. The video verdict is the mean P(fake) across frames.</span></li>
-    <li><b>Explain</b><span>Grad-CAM highlights the pixels that drove the decision; the heatmap mass is attributed to eyes, mouth, nose, hairline, skin and the face boundary.</span></li>
+    <li>
+      <b>Sample frames</b>
+      <span>Up to 16 frames are taken evenly across the clip. Neighbouring frames are near-duplicates, so more adds little.</span>
+    </li>
+    <li>
+      <b>Find the face</b>
+      <span>A detector locates the largest face and five landmarks. The crop keeps a 30% margin because face-swap seams sit at the edge of the face.</span>
+    </li>
+    <li>
+      <b>Score each frame</b>
+      <span>Every crop goes through a CNN trained on real and manipulated faces. The verdict is the average probability across frames.</span>
+    </li>
+    <li>
+      <b>Explain the decision</b>
+      <span>Grad-CAM highlights the pixels that drove the score; that attention is mapped to eyes, mouth, nose, hairline, skin and the face boundary.</span>
+    </li>
   </ol>
 </section>
+
 {% endblock %}

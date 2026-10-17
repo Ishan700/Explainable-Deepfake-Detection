@@ -1,19 +1,37 @@
 /* Upload page: drag & drop, filename echo, submit spinner.
-   Result page: segmented control that swaps the Grad-CAM / regions / crop image. */
+   Result page: segmented control that swaps the evidence image.
+   Both pages: light/dark theme toggle (remembered in localStorage). */
 (function () {
   "use strict";
 
+  // ---------- theme ----------
+  var root = document.documentElement;
+  var toggle = document.getElementById("theme-toggle");
+
+  function currentTheme() {
+    var set = root.getAttribute("data-theme");
+    if (set === "light" || set === "dark") return set;
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  if (toggle) {
+    toggle.addEventListener("click", function () {
+      var next = currentTheme() === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      try { localStorage.setItem("theme", next); } catch (e) { /* storage may be unavailable */ }
+    });
+  }
+
   // ---------- upload page ----------
-  const dz = document.getElementById("dropzone");
-  const input = document.getElementById("media-input");
-  const fileLabel = document.getElementById("dz-file");
-  const form = document.getElementById("upload-form");
-  const submitBtn = document.getElementById("submit-btn");
+  var dz = document.getElementById("dropzone");
+  var input = document.getElementById("media-input");
+  var fileLabel = document.getElementById("dz-file");
+  var form = document.getElementById("upload-form");
+  var submitBtn = document.getElementById("submit-btn");
 
   function showFile(file) {
     if (!file) return;
-    const mb = (file.size / (1024 * 1024)).toFixed(1);
-    fileLabel.textContent = file.name + "  (" + mb + " MB)";
+    var mb = (file.size / (1024 * 1024)).toFixed(1);
+    fileLabel.textContent = file.name + " (" + mb + " MB)";
     fileLabel.hidden = false;
     dz.classList.add("has-file");
   }
@@ -37,22 +55,22 @@
   if (form && submitBtn) {
     form.addEventListener("submit", function () {
       submitBtn.classList.add("loading");
-      submitBtn.querySelector(".btn-label").textContent = "Analyzing…";
+      submitBtn.querySelector(".btn-label").textContent = "Analyzing";
     });
   }
 
   // ---------- result page ----------
-  document.querySelectorAll(".segmented").forEach(function (group) {
-    const img = document.getElementById(group.dataset.target);
+  document.querySelectorAll(".tabs").forEach(function (group) {
+    var img = document.getElementById(group.dataset.target);
     if (!img) return;
-    group.querySelectorAll(".seg").forEach(function (btn) {
+    group.querySelectorAll(".tab").forEach(function (btn) {
       btn.addEventListener("click", function () {
-        group.querySelectorAll(".seg").forEach(function (b) { b.classList.remove("active"); });
+        group.querySelectorAll(".tab").forEach(function (b) { b.classList.remove("active"); });
         btn.classList.add("active");
         img.src = btn.dataset.src;
+        img.classList.toggle("contain", btn.dataset.fit === "contain");
       });
+      var pre = new Image(); pre.src = btn.dataset.src; // preload so switching is instant
     });
-    // Preload the alternatives so switching is instant.
-    group.querySelectorAll(".seg").forEach(function (btn) { const i = new Image(); i.src = btn.dataset.src; });
   });
 })();

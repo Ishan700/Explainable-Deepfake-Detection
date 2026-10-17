@@ -161,21 +161,23 @@ class DeepfakeDetector:
     def _render(self, out_dir: Path, frame: np.ndarray, face: Face, crop: np.ndarray, cam: np.ndarray,
                 landmarks_crop: np.ndarray | None, exp: Explanation, verdict: str) -> dict[str, str]:
         out_dir.mkdir(parents=True, exist_ok=True)
-        disp = 448  # display size for the crop-based panels
+        disp = 512  # display size for the crop-based panels
         crop_disp = cv2.resize(crop, (disp, disp), interpolation=cv2.INTER_CUBIC)
-        heat_disp = overlay_heatmap(crop_disp, cam, alpha=0.45)
+        heat_disp = overlay_heatmap(crop_disp, cam)
 
         lms = landmarks_crop
         if lms is None:
             lms = template_landmarks(crop.shape[0])
         lms_disp = lms * (disp / crop.shape[0])
         top_regions = [r.name for r in exp.regions[:2] if r.share >= 0.10]
-        regions_img = draw_region_outlines(heat_disp, lms_disp, top_regions)
+        # Regions view: soft heat (no contour) + outlines of the attributed regions + landmarks
+        regions_img = draw_region_outlines(overlay_heatmap(crop_disp, cam, alpha=0.4, contour=None),
+                                           lms_disp, top_regions)
         if landmarks_crop is not None:
             regions_img = draw_landmarks(regions_img, lms_disp, radius=4)
 
         label = f"{verdict.upper()} {exp.confidence * 100:.0f}%"
-        color = (60, 60, 230) if verdict == config.CLASS_FAKE else (80, 190, 90)
+        color = (28, 35, 180) if verdict == config.CLASS_FAKE else (63, 112, 25)
         frame_img = draw_box(frame, face.crop_box, label, color=color, thickness=3)
         h, w = frame_img.shape[:2]
         if w > 960:

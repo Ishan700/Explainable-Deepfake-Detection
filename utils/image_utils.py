@@ -27,22 +27,48 @@ def save_image(path: str | Path, image_bgr: np.ndarray, quality: int = 92) -> Pa
     return path
 
 
+_COLORMAP = getattr(cv2, "COLORMAP_TURBO", cv2.COLORMAP_JET)
+
+
+def _resize_heat(heatmap: np.ndarray, size: tuple[int, int]) -> np.ndarray:
+    hm = cv2.resize(heatmap.astype(np.float32), size, interpolation=cv2.INTER_CUBIC)
+    hm = np.clip(hm, 0.0, None)
+    if hm.max() > 0:
+        hm = hm / hm.max()
+    return hm
+
+
 def heatmap_to_color(heatmap: np.ndarray, size: tuple[int, int] | None = None) -> np.ndarray:
-    """[0,1] float heatmap -> BGR JET colour image (optionally resized to (w, h))."""
+    """[0,1] float heatmap -> BGR colour image (optionally resized to (w, h))."""
     hm = np.clip(heatmap, 0.0, 1.0)
     if size is not None:
-        hm = cv2.resize(hm, size, interpolation=cv2.INTER_CUBIC)
-    hm8 = np.uint8(255 * hm)
-    return cv2.applyColorMap(hm8, cv2.COLORMAP_JET)
+        hm = _resize_heat(hm, size)
+    return cv2.applyColorMap(np.uint8(255 * hm), _COLORMAP)
 
 
-def overlay_heatmap(image_bgr: np.ndarray, heatmap: np.ndarray, alpha: float = 0.45) -> np.ndarray:
-    """Blend a Grad-CAM heatmap over an image. Returns BGR uint8."""
+def overlay_heatmap(image_bgr: np.ndarray, heatmap: np.ndarray, alpha: float = 0.65,
+                    floor: float = 0.18, contour: float | None = 0.6) -> np.ndarray:
+    """
+    Blend a Grad-CAM heatmap over an image so that only the *active* area is
+    coloured: opacity ramps from 0 at `floor` to `alpha` at 1.0, so cold regions
+    stay as the original photo instead of being tinted blue. A thin contour at
+    the `contour` level outlines the strongest evidence. Returns BGR uint8.
+    """
     h, w = image_bgr.shape[:2]
-    color = heatmap_to_color(heatmap, (w, h))
+    hm = _resize_heat(heatmap, (w, h))
+    color = cv2.applyColorMap(np.uint8(255 * hm), _COLORMAP).astype(np.float32)
+    # per-pixel opacity: smoothstep ramp from floor..1
+    t = np.clip((hm - floor) / max(1e-6, 1.0 - floor), 0.0, 1.0)
+    a = (t * t * (3 - 2 * t)) * alpha
+    a = cv2.GaussianBlur(a, (0, 0), 2)[..., None]
     base = image_bgr.astype(np.float32)
-    blended = (1 - alpha) * base + alpha * color.astype(np.float32)
-    return np.clip(blended, 0, 255).astype(np.uint8)
+    out = (1 - a) * base + a * color
+    out = np.clip(out, 0, 255).astype(np.uint8)
+    if contour is not None:
+        mask = (hm >= contour).astype(np.uint8)
+        cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cv2.drawContours(out, cnts, -1, (255, 255, 255), 2, cv2.LINE_AA)
+    return out
 
 
 def draw_box(image_bgr: np.ndarray, box: tuple[int, int, int, int], label: str | None = None,
