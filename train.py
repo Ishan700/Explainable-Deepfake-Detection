@@ -162,7 +162,11 @@ def main() -> None:
     ap.add_argument("--batch-size", type=int, default=config.BATCH_SIZE)
     ap.add_argument("--lr", type=float, default=config.LEARNING_RATE)
     ap.add_argument("--fine-tune-lr", type=float, default=config.FINE_TUNE_LEARNING_RATE)
-    ap.add_argument("--fine-tune-layers", type=int, default=config.FINE_TUNE_LAYERS)
+    ap.add_argument("--fine-tune-layers", type=int, default=config.FINE_TUNE_LAYERS,
+                    help="how many backbone layers (from the top) to unfreeze in phase 2")
+    ap.add_argument("--fine-tune-all", action="store_true",
+                    help="unfreeze the whole backbone in phase 2 (BatchNorm stays frozen); "
+                         "recommended for hard datasets such as Celeb-DF")
     ap.add_argument("--no-pretrained", action="store_true", help="random init instead of ImageNet weights")
     ap.add_argument("--dataset", type=Path, default=config.DATASET_DIR)
     ap.add_argument("--model-path", type=Path, default=config.MODEL_PATH)
@@ -212,9 +216,11 @@ def main() -> None:
     if not pretrained and args.fine_tune_epochs > 0 and not args.no_fine_tune:
         print("Skipping phase 2: the whole network was already trainable in phase 1.")
     elif not args.no_fine_tune and args.fine_tune_epochs > 0:
-        n = set_backbone_trainable(model, True, top_layers=args.fine_tune_layers)
+        top = None if args.fine_tune_all else args.fine_tune_layers
+        n = set_backbone_trainable(model, True, top_layers=top)
         compile_model(model, args.fine_tune_lr)
-        print(f"\n=== Phase 2: fine-tuning {n} backbone layers ({args.fine_tune_epochs} epochs) ===")
+        scope = "the whole backbone" if args.fine_tune_all else f"the top {n} backbone layers"
+        print(f"\n=== Phase 2: fine-tuning {scope} ({n} layers, {args.fine_tune_epochs} epochs) ===")
         model.fit(train_ds, validation_data=val_ds, epochs=args.fine_tune_epochs, class_weight=weights,
                   callbacks=make_callbacks(args.model_path, log_path, args.patience, append_log=True,
                                            initial_best=best_auc))

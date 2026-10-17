@@ -184,14 +184,11 @@ These hints describe what attention on a region *usually* corresponds to; they a
 
 ## Results
 
-Fill this table from `results/eval_test.json` after training on your dataset. Expected ballpark for an EfficientNet-B0 trained on FaceForensics++ (c23) with this recipe:
+<!-- RESULTS:START -->
+No results yet — after `python evaluate.py`, run `python scripts/report_results.py` to fill this section.
+<!-- RESULTS:END -->
 
-| Setting | Frame AUC | Video AUC | Video accuracy |
-|---|---|---|---|
-| FF++ c23 → FF++ test | — | — | — |
-| FF++ c23 → Celeb-DF v2 (cross-dataset) | — | — | — |
-
-The cross-dataset row is the honest one. In-dataset numbers above 0.95 AUC are routine; generalising to a different generator or compression level is the actual research problem, and reporting the drop is more valuable than hiding it.
+In-dataset numbers above 0.9 AUC are routine in the literature; generalising to a different generator or compression level is the actual research problem, and reporting the drop is more valuable than hiding it.
 
 ## Configuration
 
