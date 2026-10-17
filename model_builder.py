@@ -43,9 +43,13 @@ def build_backbone(architecture: str = config.ARCHITECTURE, pretrained: bool = c
         raise ValueError(f"Unknown architecture {architecture!r}; choose from {available_architectures()}")
     ctor, _ = _BACKBONES[architecture]
     weights = "imagenet" if pretrained else None
-    # name="backbone" is the stable handle Grad-CAM uses to find this sub-model.
-    backbone = ctor(include_top=False, weights=weights,
-                    input_shape=(img_size, img_size, 3), name="backbone")
+    # Build with the default name: keras.applications derives the pretrained
+    # weights file name from the model name (efficientnetb0_notop.h5), so
+    # passing name="backbone" here would make it look for backbone_notop.h5.
+    backbone = ctor(include_top=False, weights=weights, input_shape=(img_size, img_size, 3))
+    # Rename afterwards: "backbone" is the stable handle Grad-CAM and the
+    # fine-tuning code use to find this sub-model inside the saved model.
+    backbone.name = "backbone"
     return backbone
 
 
