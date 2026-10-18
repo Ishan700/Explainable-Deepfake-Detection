@@ -100,10 +100,18 @@ def _run(path: Path, job_id: str) -> dict:
     result["job_id"] = job_id
     result["original_name"] = secure_filename(request.files["media"].filename)
     result["upload_url"] = url_for("static", filename=f"uploads/{path.name}")
+
+    def to_url(local_path: str) -> str:
+        rel = Path(local_path).resolve().relative_to(out_dir.resolve()).as_posix()
+        return url_for("static", filename=f"results/{job_id}/{rel}")
+
     if "images" in result:
-        result["image_urls"] = {
-            k: url_for("static", filename=f"results/{job_id}/{Path(v).name}") for k, v in result["images"].items()
-        }
+        result["image_urls"] = {k: to_url(v) for k, v in result["images"].items()}
+    for person in result.get("people", []):
+        if "images" in person:
+            person["image_urls"] = {k: to_url(v) for k, v in person["images"].items()}
+    if "overview_image" in result:
+        result["overview_url"] = to_url(result["overview_image"])
     return result
 
 
@@ -129,6 +137,9 @@ def api_analyze():
     path, job_id = _save_upload()
     result = _run(path, job_id)
     result.pop("images", None)  # local paths are not useful to API clients
+    result.pop("overview_image", None)
+    for person in result.get("people", []):
+        person.pop("images", None)
     return jsonify(result)
 
 

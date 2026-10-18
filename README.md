@@ -47,6 +47,7 @@ Explainable-Deepfake-Detection/
 │
 ├── preprocessing/
 │   ├── face_detection.py       # YuNet (default) / Haar / none; margin + square crop; landmarks
+│   ├── tracking.py             # links faces across sampled frames into people (multi-face)
 │   └── preprocessing.py        # THE single crop → tensor function used by train and predict
 ├── explainability/
 │   ├── gradcam.py              # Grad-CAM for Keras 3 (works on the loaded .keras file)
@@ -128,6 +129,8 @@ Writes `results/eval_test.json` plus ROC and confusion-matrix PNGs. Both **frame
 
 ### 5. Run the demo
 
+On Windows, double-click `run.bat` — it activates the environment, starts the server and opens the browser. Or from a terminal:
+
 ```bash
 python app.py        # → http://127.0.0.1:5000
 ```
@@ -182,31 +185,13 @@ These hints describe what attention on a region *usually* corresponds to; they a
 - **Class order is never assumed.** `class_names.json` is written from the dataset object; `predict.py` looks up the index of `"fake"`.
 - **JPEG-recompression augmentation.** Half the training crops are re-encoded at quality 40–95 so the model learns forgery cues instead of compression fingerprints.
 - **Video-level verdict.** Mean P(fake) over sampled frames, with per-frame scores shown so disagreement is visible.
+- **Every face, not just the largest.** Up to five faces per frame are scored and linked across frames by box position into *people*; each person gets their own verdict, reliability, heatmap and explanation, and the clip is stamped fake if any one person is. The result page opens with an overview frame showing every box.
 - **Named sub-models.** The backbone and head are named `backbone` / `head`, which lets Grad-CAM be built from a loaded `.keras` file without the nested-graph errors Keras 3 raises when reaching into a sub-model from outside.
 
 ## Results
 
 <!-- RESULTS:START -->
-Trained on **Celeb-DF v2, 300 videos per class** with `efficientnetb0` (ImageNet init), split by video, evaluated on the held-out `test` split. Frames per video: 16. Threshold 0.5. Updated 2026-10-17.
-
-| Level | n | Accuracy | AUC | Precision (fake) | Recall (fake) | F1 (fake) |
-|---|---|---|---|---|---|---|
-| Frame | 1440 | 0.652 | 0.734 | 0.615 | 0.815 | 0.701 |
-| Video | 90 | 0.667 | 0.739 | 0.627 | 0.822 | 0.712 |
-
-Video-level confusion: real→real 23, real→fake 22, fake→real 8, fake→fake 37.
-
-AUC is the headline number: it does not depend on the 0.5 threshold, and the classes are not always balanced. The in-dataset score above is optimistic by construction; the honest check is a **cross-dataset** run (`python evaluate.py --dataset <other>`), which is usually 10–30 points lower.
-
-**Training curves (loss / accuracy / AUC per epoch)**  
-![Training curves (loss / accuracy / AUC per epoch)](docs/results/training_curves.png)
-
-**ROC curve, frame level**  
-![ROC curve, frame level](docs/results/roc_test.png)
-
-**Confusion matrix, video level**  
-![Confusion matrix, video level](docs/results/confusion_test_videos.png)
-
+No results yet — after `python evaluate.py`, run `python scripts/report_results.py` to fill this section.
 <!-- RESULTS:END -->
 
 In-dataset numbers above 0.9 AUC are routine in the literature; generalising to a different generator or compression level is the actual research problem, and reporting the drop is more valuable than hiding it.
@@ -221,12 +206,13 @@ All knobs are in `config.py`: `IMG_SIZE`, `FRAMES_PER_VIDEO`, `FACE_MARGIN`, `AR
 curl -F "media=@clip.mp4" -F "frames=16" http://127.0.0.1:5000/api/analyze
 ```
 
-Returns the same structure as `predict.py --json`: `verdict`, `confidence`, `p_fake`, `frame_scores`, `stats`, `reliability`, `explanation` (region shares, hints, summary) and `image_urls` for the rendered panels.
+Returns the same structure as `predict.py --json`: `overall` (clip verdict, how many people, how many fake), `people` (one entry per person with `verdict`, `confidence`, `p_fake`, `frame_scores`, `stats`, `reliability`, `explanation` and `image_urls`), plus the primary person's fields mirrored at the top level for convenience.
 
 ## Limitations
 
 - Trained on one dataset → accuracy drops on footage from other generators, resolutions or compression levels. Always report a cross-dataset number.
 - Frame-level CNN: no temporal modelling. Flicker and audio-visual desync are invisible to it (a CNN+LSTM over the sampled frames is the natural next step).
+- Multi-face tracking is by box position between sampled frames, not face recognition: two people crossing paths can swap labels. Faces under 40 px are ignored.
 - Splits are by *video*, not by *identity*. In Celeb-DF the same celebrities appear in real and fake clips across splits, so in-dataset numbers are slightly optimistic; the cross-dataset test is the honest check.
 - Grad-CAM is coarse (7×7 for a 224 input) and shows *where*, not *why*; the region hints are heuristics.
 - The web demo is a localhost tool: `static/` is public to anyone who can reach the server, and there is no authentication or rate limiting.

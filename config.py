@@ -105,6 +105,13 @@ AUG_JPEG_PROBABILITY = 0.5
 THRESHOLD = 0.50               # video is "fake" if mean P(fake) >= THRESHOLD
 MIN_FACES_FOR_VERDICT = 3      # fewer detected faces than this -> "inconclusive"
 
+# Multi-face: every face in a frame is scored and faces are linked across frames
+# into "people" (tracks). Each person gets their own verdict and explanation.
+MAX_FACES = 5                  # largest N faces per frame are considered
+MIN_TRACK_FRAMES = 2           # for videos, drop people seen in fewer sampled frames than this
+TRACK_MAX_CENTRE_DIST = 0.75   # same person if centre moved < this * box size between samples
+TRACK_SIZE_RATIO = 2.2         # ... and box size changed by less than this factor
+
 # --------------------------------------------------------------------------- #
 # Web app
 # --------------------------------------------------------------------------- #

@@ -3,8 +3,8 @@
 {% block content %}
 
 {% set ok = r.status == 'ok' %}
-{% set fake = ok and r.verdict == 'fake' %}
-{% set e = r.explanation if ok else none %}
+{% set multi = ok and r.people|length > 1 %}
+{% set overall_fake = ok and r.overall.verdict == 'fake' %}
 
 <article class="sheet report">
   <header class="report-head">
@@ -13,18 +13,24 @@
       <h1 class="filename">{{ r.original_name }}</h1>
       <p class="meta">
         {% if r.input.type == 'video' %}
-          Video{% if r.input.width %}, {{ r.input.width }}×{{ r.input.height }}{% endif %}{% if r.input.fps %} at {{ '%.0f'|format(r.input.fps) }} fps{% endif %}.
-          A face was found in {{ r.input.faces_detected }} of {{ r.input.frames_sampled }} sampled frames.
+          Video{% if r.input.width %}, {{ r.input.width }}×{{ r.input.height }}{% endif %}{% if r.input.fps %} at {{ '%.0f'|format(r.input.fps) }} fps{% endif %}, {{ r.input.frames_sampled }} frames sampled.
         {% else %}
-          Single image. {% if r.input.faces_detected %}One face found.{% else %}No face found.{% endif %}
+          Single image.
         {% endif %}
+        {% if ok %}
+          {% if multi %}{{ r.people|length }} people found and followed across frames.{% else %}One face found{% if r.input.type == 'video' %} in {{ r.people[0].frames_seen }} of {{ r.input.frames_sampled }} frames{% endif %}.{% endif %}
+        {% else %}No face found.{% endif %}
         Examined in {{ r.timing_s }} s.
       </p>
     </div>
     {% if ok %}
-    <div class="stamp {{ 'is-fake' if fake else 'is-real' }}" role="img" aria-label="Verdict: {{ r.verdict }}, {{ '%.0f'|format(r.confidence * 100) }} percent confidence">
-      <span class="stamp-word">{{ 'Fake' if fake else 'Real' }}</span>
-      <span class="stamp-sub">{{ '%.0f'|format(r.confidence * 100) }}% confidence</span>
+    <div class="stamp {{ 'is-fake' if overall_fake else 'is-real' }}" role="img" aria-label="Verdict: {{ r.overall.verdict }}">
+      <span class="stamp-word">{{ 'Fake' if overall_fake else 'Real' }}</span>
+      <span class="stamp-sub">
+        {% if multi %}
+          {% if overall_fake %}{{ r.overall.fake_people }} of {{ r.overall.people }} faces{% else %}all {{ r.overall.people }} faces{% endif %}
+        {% else %}{{ '%.0f'|format(r.overall.confidence * 100) }}% confidence{% endif %}
+      </span>
     </div>
     {% else %}
     <div class="stamp is-none" role="img" aria-label="No verdict">
@@ -40,79 +46,115 @@
   </div>
   {% else %}
 
-  <div class="report-body">
-    <section class="evidence">
-      <div class="tabs" role="tablist" data-target="cam-img">
-        <button type="button" class="tab active" data-src="{{ r.image_urls.heatmap }}" data-fit="cover">Heatmap</button>
-        <button type="button" class="tab" data-src="{{ r.image_urls.regions }}" data-fit="cover">Regions</button>
-        <button type="button" class="tab" data-src="{{ r.image_urls.crop }}" data-fit="cover">Face only</button>
-        <button type="button" class="tab" data-src="{{ r.image_urls.frame }}" data-fit="contain">Full frame</button>
-      </div>
-      <div class="cam-wrap">
-        <img id="cam-img" class="cam" src="{{ r.image_urls.heatmap }}" alt="Heatmap of the pixels that influenced the verdict">
-      </div>
-      <p class="caption">
-        Frame {{ e.key_frame_index }}, P(fake) {{ '%.2f'|format(e.key_frame_p_fake) }}.
-        Warm colours mark the pixels that pushed the decision toward {{ r.verdict }}; the white line encloses the strongest evidence.
-      </p>
-    </section>
-
-    <section class="findings">
-      <h2>Findings</h2>
-      <ol>
+  {% if multi %}
+  <section class="overview">
+    <div class="overview-img">
+      <img src="{{ r.overview_url }}" alt="Frame with every person boxed and labelled">
+    </div>
+    <div class="overview-list">
+      <h2>Faces found</h2>
+      <p class="fineprint">{{ r.overall.summary }}</p>
+      <ol class="people-list">
+        {% for p in r.people %}
         <li>
-          <b>Score.</b>
-          Mean probability of fake is <span class="num">{{ '%.2f'|format(r.p_fake) }}</span> against a threshold of {{ threshold }}{% if r.frame_scores|length > 1 %}; {{ r.stats.frames_above_threshold }} of {{ r.frame_scores|length }} frames scored as fake{% endif %}.
-          <span class="gauge" role="img" aria-label="Mean probability of fake: {{ '%.2f'|format(r.p_fake) }}">
-            <span class="gauge-fill" style="width: {{ '%.1f'|format(r.p_fake * 100) }}%"></span>
-            <span class="gauge-thr" style="left: {{ '%.1f'|format(threshold * 100) }}%"></span>
-          </span>
+          <a href="#person-{{ p.person_id }}">{{ p.label }}</a>
+          <span class="verdict-chip {{ 'fake' if p.verdict == 'fake' else 'real' }}">{{ p.verdict }} {{ '%.0f'|format(p.confidence * 100) }}%</span>
+          <span class="fineprint">{% if r.input.type == 'video' %}{{ p.frames_seen }} of {{ r.input.frames_sampled }} frames{% else %}face about {{ p.mean_face_size }} px{% endif %}, reliability {{ p.reliability.level }}</span>
         </li>
-        <li>
-          <b>Where the evidence is.</b>
-          {{ e.summary }}
-          <ul class="regions">
-            {% for reg in e.regions %}
-            {% if reg.share >= 0.02 %}
-            <li>
-              <span class="reg-name">{% if loop.index == 1 %}<mark>{{ reg.label }}</mark>{% else %}{{ reg.label }}{% endif %}</span>
-              <span class="reg-bar"><span class="reg-fill {{ 'fake' if fake else 'real' }}" style="width: {{ '%.1f'|format(reg.share * 100) }}%"></span></span>
-              <span class="reg-pct num">{{ '%.0f'|format(reg.share * 100) }}%</span>
-            </li>
-            {% endif %}
-            {% endfor %}
-          </ul>
-          {% if e.landmark_source == 'template' %}
-          <span class="fineprint">Regions were estimated from a standard face template because no landmarks were available for this crop.</span>
-          {% endif %}
-        </li>
-        <li>
-          <b>Reliability: {{ r.reliability.level }}.</b>
-          {% for reason in r.reliability.reasons %}{{ reason[0]|upper }}{{ reason[1:] }}. {% endfor %}
-        </li>
+        {% endfor %}
       </ol>
-    </section>
-  </div>
+      <p class="fineprint">The clip is stamped fake if any one person is judged fake. People are followed by box position between sampled frames, so two people crossing paths can swap labels.</p>
+    </div>
+  </section>
+  {% endif %}
 
-  <footer class="report-foot">
-    <div class="strip-label">
-      <span>Score per frame</span>
-      {% if r.frame_scores|length > 1 %}
-      <span class="fineprint">lowest {{ '%.2f'|format(r.stats.min) }}, highest {{ '%.2f'|format(r.stats.max) }}, spread {{ '%.2f'|format(r.stats.std) }}; the marked frame is the one examined above</span>
-      {% else %}
-      <span class="fineprint">one frame, one score; upload a video to see how the score holds across time</span>
-      {% endif %}
+  {% for p in r.people %}
+  {% set fake = p.verdict == 'fake' %}
+  {% set e = p.explanation %}
+  <section class="person" id="person-{{ p.person_id }}">
+    {% if multi %}
+    <header class="person-head">
+      <h2>{{ p.label }}</h2>
+      <span class="verdict-chip {{ 'fake' if fake else 'real' }}">{{ p.verdict }} {{ '%.0f'|format(p.confidence * 100) }}%</span>
+      <span class="fineprint">{% if r.input.type == 'video' %}seen in {{ p.frames_seen }} of {{ r.input.frames_sampled }} sampled frames{% else %}face about {{ p.mean_face_size }} px wide{% endif %}</span>
+    </header>
+    {% endif %}
+
+    <div class="report-body">
+      <section class="evidence">
+        <div class="tabs" role="tablist" data-target="cam-img-{{ p.person_id }}">
+          <button type="button" class="tab active" data-src="{{ p.image_urls.heatmap }}" data-fit="cover">Heatmap</button>
+          <button type="button" class="tab" data-src="{{ p.image_urls.regions }}" data-fit="cover">Regions</button>
+          <button type="button" class="tab" data-src="{{ p.image_urls.crop }}" data-fit="cover">Face only</button>
+          <button type="button" class="tab" data-src="{{ p.image_urls.frame }}" data-fit="contain">Full frame</button>
+        </div>
+        <div class="cam-wrap">
+          <img id="cam-img-{{ p.person_id }}" class="cam" src="{{ p.image_urls.heatmap }}" alt="Heatmap of the pixels that influenced the verdict for {{ p.label }}">
+        </div>
+        <p class="caption">
+          Frame {{ e.key_frame_index }}, P(fake) {{ '%.2f'|format(e.key_frame_p_fake) }}.
+          Warm colours mark the pixels that pushed the decision toward {{ p.verdict }}; the white line encloses the strongest evidence.
+        </p>
+      </section>
+
+      <section class="findings">
+        <h2>Findings</h2>
+        <ol>
+          <li>
+            <b>Score.</b>
+            Mean probability of fake is <span class="num">{{ '%.2f'|format(p.p_fake) }}</span> against a threshold of {{ threshold }}{% if p.frame_scores|length > 1 %}; {{ p.stats.frames_above_threshold }} of {{ p.frame_scores|length }} frames scored as fake{% endif %}.
+            <span class="gauge" role="img" aria-label="Mean probability of fake: {{ '%.2f'|format(p.p_fake) }}">
+              <span class="gauge-fill" style="width: {{ '%.1f'|format(p.p_fake * 100) }}%"></span>
+              <span class="gauge-thr" style="left: {{ '%.1f'|format(threshold * 100) }}%"></span>
+            </span>
+          </li>
+          <li>
+            <b>Where the evidence is.</b>
+            {{ e.summary }}
+            <ul class="regions">
+              {% for reg in e.regions %}
+              {% if reg.share >= 0.02 %}
+              <li>
+                <span class="reg-name">{% if loop.index == 1 %}<mark>{{ reg.label }}</mark>{% else %}{{ reg.label }}{% endif %}</span>
+                <span class="reg-bar"><span class="reg-fill {{ 'fake' if fake else 'real' }}" style="width: {{ '%.1f'|format(reg.share * 100) }}%"></span></span>
+                <span class="reg-pct num">{{ '%.0f'|format(reg.share * 100) }}%</span>
+              </li>
+              {% endif %}
+              {% endfor %}
+            </ul>
+            {% if e.landmark_source == 'template' %}
+            <span class="fineprint">Regions were estimated from a standard face template because no landmarks were available for this crop.</span>
+            {% endif %}
+          </li>
+          <li>
+            <b>Reliability: {{ p.reliability.level }}.</b>
+            {% for reason in p.reliability.reasons %}{{ reason[0]|upper }}{{ reason[1:] }}. {% endfor %}
+          </li>
+        </ol>
+      </section>
     </div>
-    <div class="film" aria-label="per-frame probability of fake">
-      <div class="film-thr" style="bottom: calc(12px + {{ '%.1f'|format(threshold * 100) }}% * 0.76)"></div>
-      {% for fs in r.frame_scores %}
-      <div class="cell {{ 'key' if fs.frame_index == e.key_frame_index else '' }}" title="frame {{ fs.frame_index }}: P(fake) = {{ '%.2f'|format(fs.p_fake) }}">
-        <div class="bar {{ 'hi' if fs.p_fake >= threshold else 'lo' }}" style="height: {{ '%.1f'|format([fs.p_fake * 100, 4]|max) }}%"></div>
-        <span class="idx">{{ fs.frame_index }}</span>
+
+    <footer class="report-foot">
+      <div class="strip-label">
+        <span>Score per frame{% if multi %}, {{ p.label|lower }}{% endif %}</span>
+        {% if p.frame_scores|length > 1 %}
+        <span class="fineprint">lowest {{ '%.2f'|format(p.stats.min) }}, highest {{ '%.2f'|format(p.stats.max) }}, spread {{ '%.2f'|format(p.stats.std) }}; the marked frame is the one examined above</span>
+        {% else %}
+        <span class="fineprint">one frame, one score; upload a video to see how the score holds across time</span>
+        {% endif %}
       </div>
-      {% endfor %}
-    </div>
-  </footer>
+      <div class="film" aria-label="per-frame probability of fake for {{ p.label }}">
+        <div class="film-thr" style="bottom: calc(12px + {{ '%.1f'|format(threshold * 100) }}% * 0.76)"></div>
+        {% for fs in p.frame_scores %}
+        <div class="cell {{ 'key' if fs.frame_index == e.key_frame_index else '' }}" title="frame {{ fs.frame_index }}: P(fake) = {{ '%.2f'|format(fs.p_fake) }}">
+          <div class="bar {{ 'hi' if fs.p_fake >= threshold else 'lo' }}" style="height: {{ '%.1f'|format([fs.p_fake * 100, 4]|max) }}%"></div>
+          <span class="idx">{{ fs.frame_index }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </footer>
+  </section>
+  {% endfor %}
   {% endif %}
 </article>
 
